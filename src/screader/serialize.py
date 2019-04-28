@@ -11,14 +11,14 @@ def json_hook(a):
     return dict(a)
 
 
-def convert(data, min_tick):
+def convert(data, index_prefix, min_tick):
     tick = data["t"]
     if tick <= min_tick:
         return None
     shard = data.get("s", "")
     time = datetime.utcfromtimestamp(data.get("ti", 0) / 1e3)
     out = [{
-        "_index": f"cpu-{shard}-{time.year}-{time.month}-{time.day}",
+        "_index": f"{index_prefix}cpu-{shard}-{time.year}-{time.month}-{time.day}",
         "_type": "cpu",
         "time": time,
         "tick": tick,
@@ -28,13 +28,36 @@ def convert(data, min_tick):
             "limit": data['c']['limit'],
             "bucket": data['c']['bucket'],
         },
+        "creeps": data['crp'],
         "heap": data['vm']
     }]
 
+    for cp in data['cp']:
+        out.append({
+            "_index": f"{index_prefix}kernel-{shard}-{time.year}-{time.month}-{time.day}",
+            "_type": "checkpoint",
+            "time": time,
+            "tick": tick,
+            "shard": shard,
+            'idx': cp['id'],
+            'cpu': float(cp['cpu']),
+            'name': cp['name']
+        })
+
+    for annotation in data['a']:
+        out.append({
+            "_index": f"{index_prefix}annotations-{shard}-{time.year}-{time.month}-{time.day}",
+            "_type": "annotation",
+            "time": time,
+            "tick": tick,
+            "shard": shard,
+            'text': annotation[0],
+            'tags': annotation[1]
+        })
     return out
 
 
-def decode(row, min_tick):
+def decode(row, index_prefix, min_tick):
     if len(row) == 0:
         return []
     try:
@@ -46,14 +69,14 @@ def decode(row, min_tick):
         else:
             print("UNK", row[0], ord(row[0]), row)
         if data:
-            return convert(data, min_tick)
+            return convert(data, index_prefix, min_tick)
     except json.JSONDecodeError:
         return []
 
 
-def decode_rows(data: str, min_tick: int = 0):
+def decode_rows(data: str, index_prefix: str, min_tick: int = 0):
     for row in data.split("\n"):
-        data = decode(row, min_tick)
+        data = decode(row, index_prefix, min_tick)
         if data is not None:
             for msg in data:
                 yield msg

@@ -32,6 +32,19 @@ def convert(data, index_prefix, min_tick):
         "heap": data['vm']
     }]
 
+    for name, process in data['p'].items():
+        out.append({
+            "_index": f"{index_prefix}process-{shard}-{time.year}-{time.month}-{time.day}",
+            "_type": "process",
+            "time": time,
+            "tick": tick,
+            "shard": shard,
+            'name': name,
+            'cpu_sum': round(process[1], 2),
+            'count': process[0],
+            'cpu_avg': round(process[1] / process[0], 3)
+        })
+
     for cp in data['cp']:
         out.append({
             "_index": f"{index_prefix}kernel-{shard}-{time.year}-{time.month}-{time.day}",

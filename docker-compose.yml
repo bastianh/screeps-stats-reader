@@ -6,23 +6,27 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./grafana:/var/lib/grafana
+      - grafana:/var/lib/grafana
+    depends_on:
+      - influxdb
   web:
     build: .
     command: python3 manage.py src/stats.py
     volumes:
       - .:/code
-  elasticsearch:
-    image: amazon/opendistro-for-elasticsearch:0.8.0
-    environment:
-      discovery.type: single-node
-      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    depends_on:
+      - influxdb
+  influxdb:
+    image: influxdb:1.7
+    volumes:
+      - influxdb:/var/lib/influxdb
     ports:
-      - "9200:9200"
-      - "9600:9600"
-  kibana:
-    image: amazon/opendistro-for-elasticsearch-kibana:0.8.0
-    environment:
-      ELASTICSEARCH_URL: https://elasticsearch:9200
+      - "8086:8086"
+  gui:
+    image: timeseriesadmin/timeseriesadmin:latest
     ports:
-      - 5601:5601
+      - "8888:80"
+
+volumes:
+  influxdb:
+  grafana:

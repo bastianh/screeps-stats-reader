@@ -7,6 +7,35 @@ from screader import lzstring
 
 lzs = lzstring.LZString()
 
+from influxdb import InfluxDBClient
+
+client = InfluxDBClient('localhost', 8086, None, None, "screeps")
+client.create_database("screeps")
+
+
+class CPUSeriesHelper(SeriesHelper):
+    class Meta:
+        client = client
+        series_name = 'cpu'
+        fields = ['tick', 'cpu', 'limit', 'bucket', 'creeps']
+        tags = ['shard']
+        bulk_size = 5
+        autocommit = True
+
+
+class VMSeriesHelper(SeriesHelper):
+    class Meta:
+        client = client
+        series_name = 'vm'
+        fields = ['tick', 'total_heap_size', 'total_heap_size_executable', 'total_physical_size',
+                  'total_available_size',
+                  'used_heap_size', 'heap_size_limit', 'malloced_memory', 'peak_malloced_memory',
+                  'externally_allocated_size']
+        tags = ['shard', ]
+        bulk_size = 5
+        autocommit = True
+
+
 def json_hook(a):
     # print(a)
     return dict(a)
@@ -16,22 +45,18 @@ def convert(data, index_prefix, min_tick):
     tick = data["t"]
     if tick <= min_tick:
         return None
-    shard = data.get("s", "")
     time = datetime.utcfromtimestamp(data.get("ti", 0) / 1e3)
-    out = [{
-        "_index": f"{index_prefix}cpu-{shard}-{time.year}-{time.month}-{time.day}",
-        "_type": "cpu",
-        "time": time,
-        "tick": tick,
-        "shard": shard,
-        "cpu": {
-            "cpu": float(data['c']['cpu']),
-            "limit": data['c']['limit'],
-            "bucket": data['c']['bucket'],
-        },
-        "creeps": data['crp'],
-        "heap": data['vm']
-    }]
+    shard = data.get("s", "unknown")
+    shard = "leebede"
+
+    CPUSeriesHelper(shard=shard, tick=tick, time=time, cpu=float(data['c']['cpu']), limit=data['c']['limit'],
+                    bucket=data['c']['bucket'],
+                    creeps=data['crp'])
+
+    del data["vm"]["does_zap_garbage"]
+    VMSeriesHelper(shard=shard, tick=tick, time=time, **data["vm"])
+
+    out = []
 
     for name, process in data['p'].items():
         out.append({
@@ -73,7 +98,7 @@ def convert(data, index_prefix, min_tick):
 
 def decode(row, index_prefix, min_tick):
     if len(row) == 0:
-        return []
+        return
     try:
         data = None
         if ord(row[0]) == 7137:
@@ -83,16 +108,14 @@ def decode(row, index_prefix, min_tick):
         else:
             print("UNK", row[0], ord(row[0]), row)
         if data:
-            return convert(data, index_prefix, min_tick)
+            convert(data, index_prefix, min_tick)
     except json.JSONDecodeError:
-        return []
+        pass
 
 
 def decode_rows(data: str, index_prefix: str, min_tick: int = 0):
     for row in data.split("\n"):
-        data = decode(row, index_prefix, min_tick)
-        if data is not None:
-            for msg in data:
-                yield msg
-        else:
-            return
+        decode(row, index_prefix, min_tick)
+
+    CPUSeriesHelper.commit()
+    VMSeriesHelper.commit()

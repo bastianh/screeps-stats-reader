@@ -5,8 +5,7 @@ name = "pypi"
 
 [packages]
 screepsapi = "*"
-elasticsearch = "*"
-elasticsearch-dsl = "*"
+influxdb = "*"
 
 [dev-packages]
 

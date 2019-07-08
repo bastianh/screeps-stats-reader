@@ -9,7 +9,7 @@ lzs = lzstring.LZString()
 
 from influxdb import InfluxDBClient
 
-client = InfluxDBClient('localhost', 8086, None, None, "screeps")
+client = InfluxDBClient('influxdb', 8086, None, None, "screeps")
 client.create_database("screeps")
 
 
